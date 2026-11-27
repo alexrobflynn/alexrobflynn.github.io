@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -116,26 +116,32 @@
         }
 
         /* SCROLL-TRIGGERED FADE-IN */
+        /* BALANCED MASONRY GALLERY GRID */
+        /* BALANCED MASONRY GALLERY GRID */
+        .gallery-container {
+            padding: 0 5vw 80px 5vw;
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+
+        .masonry-column {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* SCROLL-TRIGGERED FADE-IN */
         .gallery-item {
-            margin-bottom: 20px;
-            break-inside: avoid;
+            margin-bottom: 0;
             overflow: hidden;
             opacity: 0;
-            transform: translateY(16px);
-            transition: opacity 0.65s cubic-bezier(0.22, 1, 0.36, 1),
-                        transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+            transform: translateY(18px);
+            transition: opacity 0.7s ease, transform 0.7s ease;
         }
-
-        .gallery-item.is-visible {
-            opacity: 1;
-            transform: translateY(0);
         }
-
-        .gallery-item img {
-            width: 100%;
-            display: block;
-            cursor: zoom-in;
-            transition: opacity 0.35s ease, transform 0.45s ease;
         }
 
         /* FOCUS DIM ON HOVER (DESKTOP ONLY) */
@@ -255,12 +261,7 @@
         }
 
         /* MOBILE RESPONSIVENESS */
-        @media (max-width: 900px) {
-            .gallery-container {
-                column-count: 2;
-            }
-        }
-
+        /* MOBILE RESPONSIVENESS */
         @media (max-width: 600px) {
             header {
                 flex-direction: column;
@@ -274,18 +275,16 @@
                 margin-left: 12px;
             }
             .gallery-container {
-                column-count: 1;
                 padding: 0 20px 50px 20px;
             }
-            .lightbox {
-                padding: 20px;
-            }
-            .lightbox-stage {
-                padding: 12px 0;
-            }
             .lightbox-nav {
-                display: none; /* Swipe left/right handles mobile navigation */
+                display: none; /* Visitors swipe left/right on mobile */
             }
+            .lightbox-img {
+                max-width: 94vw;
+                max-height: 76vh;
+            }
+        }
         }
         /* CUSTOM DOT CURSOR */
         html,
@@ -354,17 +353,16 @@
 
     <script>
         // 1. LIGHT / DARK CANVAS TOGGLE
+        /* 1. LIGHT / DARK CANVAS TOGGLE (DARK BY DEFAULT) */
         const themeToggle = document.getElementById('themeToggle');
-        const savedTheme = localStorage.getItem('portfolio-theme');
-        if (savedTheme === 'dark') {
-            document.documentElement.setAttribute('data-theme', 'dark');
-        }
+        const savedTheme = localStorage.getItem('siteTheme') || 'dark';
+        document.documentElement.setAttribute('data-theme', savedTheme);
 
         themeToggle.addEventListener('click', () => {
             const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
             const nextTheme = isDark ? 'light' : 'dark';
             document.documentElement.setAttribute('data-theme', nextTheme);
-            localStorage.setItem('portfolio-theme', nextTheme);
+            localStorage.setItem('siteTheme', nextTheme);
         });
 
         // 2. SCROLL-TRIGGERED FADE-IN
@@ -465,6 +463,64 @@
                 showPhoto(diff < 0 ? currentIndex + 1 : currentIndex - 1);
             }
         }, { passive: true });
+        /* 4. BALANCED MASONRY COLUMNS */
+        const gallery = document.querySelector('.gallery-container');
+        const allItems = Array.from(document.querySelectorAll('.gallery-item'));
+        let activeColCount = 0;
+
+        function getColumnCount() {
+            if (window.innerWidth <= 600) return 1;
+            if (window.innerWidth <= 900) return 2;
+            return 3;
+        }
+
+        function layoutMasonry(force = false) {
+            const colCount = getColumnCount();
+            if (!force && colCount === activeColCount) return;
+            activeColCount = colCount;
+
+            gallery.innerHTML = '';
+            const columns = [];
+            const heights = new Array(colCount).fill(0);
+
+            for (let i = 0; i < colCount; i++) {
+                const col = document.createElement('div');
+                col.className = 'masonry-column';
+                gallery.appendChild(col);
+                columns.push(col);
+            }
+
+            allItems.forEach((item) => {
+                const img = item.querySelector('img');
+                const ratio = (img && img.naturalWidth) ? (img.naturalHeight / img.naturalWidth) : 1;
+                let shortest = 0;
+                for (let i = 1; i < colCount; i++) {
+                    if (heights[i] < heights[shortest]) shortest = i;
+                }
+                columns[shortest].appendChild(item);
+                heights[shortest] += ratio + 0.06;
+                if (!item.classList.contains('is-visible')) observer.observe(item);
+            });
+        }
+
+        const masonryImgs = allItems.map(item => item.querySelector('img')).filter(Boolean);
+        let loadedCount = 0;
+        function onImgReady() {
+            loadedCount++;
+            if (loadedCount === masonryImgs.length) layoutMasonry(true);
+        }
+
+        masonryImgs.forEach((img) => {
+            if (img.complete) {
+                onImgReady();
+            } else {
+                img.addEventListener('load', onImgReady, { once: true });
+                img.addEventListener('error', onImgReady, { once: true });
+            }
+        });
+
+        layoutMasonry(true);
+        window.addEventListener('resize', () => layoutMasonry(false));
     </script>
 
 </body>
