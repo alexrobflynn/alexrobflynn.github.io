@@ -89,7 +89,6 @@
             border: none;
             padding: 4px;
             margin-left: 28px;
-            cursor: pointer;
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -108,15 +107,6 @@
             opacity: 0.7;
         }
 
-        /* MASONRY GALLERY GRID */
-        .gallery-container {
-            padding: 0 5vw 80px 5vw;
-            column-count: 3;
-            column-gap: 20px;
-        }
-
-        /* SCROLL-TRIGGERED FADE-IN */
-        /* BALANCED MASONRY GALLERY GRID */
         /* BALANCED MASONRY GALLERY GRID */
         .gallery-container {
             padding: 0 5vw 80px 5vw;
@@ -133,15 +123,28 @@
             gap: 20px;
         }
 
-        /* SCROLL-TRIGGERED FADE-IN */
+        /* SCROLL-TRIGGERED FADE-IN (FAIL-SAFE) */
         .gallery-item {
             margin-bottom: 0;
             overflow: hidden;
-            opacity: 0;
-            transform: translateY(18px);
             transition: opacity 0.7s ease, transform 0.7s ease;
         }
+
+        .js-ready .gallery-item {
+            opacity: 0;
+            transform: translateY(18px);
         }
+
+        .js-ready .gallery-item.is-visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .gallery-item img {
+            width: 100%;
+            height: auto;
+            display: block;
+            transition: transform 0.45s ease, opacity 0.35s ease;
         }
 
         /* FOCUS DIM ON HOVER (DESKTOP ONLY) */
@@ -193,7 +196,6 @@
             font-size: 0.8rem;
             text-transform: uppercase;
             letter-spacing: 1.5px;
-            cursor: pointer;
             padding: 6px 0;
             transition: color 0.25s ease;
         }
@@ -238,7 +240,6 @@
             color: var(--text);
             font-size: 1.6rem;
             font-weight: 300;
-            cursor: pointer;
             padding: 16px 12px;
             opacity: 0.55;
             transition: opacity 0.25s ease;
@@ -261,7 +262,6 @@
         }
 
         /* MOBILE RESPONSIVENESS */
-        /* MOBILE RESPONSIVENESS */
         @media (max-width: 600px) {
             header {
                 flex-direction: column;
@@ -277,15 +277,14 @@
             .gallery-container {
                 padding: 0 20px 50px 20px;
             }
+            .lightbox-stage {
+                padding: 12px 0;
+            }
             .lightbox-nav {
-                display: none; /* Visitors swipe left/right on mobile */
-            }
-            .lightbox-img {
-                max-width: 94vw;
-                max-height: 76vh;
+                display: none;
             }
         }
-        }
+
         /* CUSTOM DOT CURSOR */
         html,
         html * {
@@ -307,14 +306,13 @@
             <a href="about.html">About</a>
             <a href="mailto:alexrobflynn@gmail.com">Contact</a>
             <a href="https://instagram.com/alex__flynn" target="_blank">IG</a>
-            <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode" title="Darkmode">
+            <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode" title="Toggle light / dark mode">
                 <span class="theme-dot"></span>
             </button>
         </nav>
     </header>
 
     <main class="gallery-container">
-        <!-- PASTE YOUR EXISTING <div class="gallery-item"> LINES BELOW THIS LINE -->
         <!-- Optional: add data-caption="..." to any img to show a caption in the lightbox -->
         <div class="gallery-item"><img src="images/basketball_hoop.jpg" alt="Headshot"></div>
         <div class="gallery-item"><img src="images/zeek_headshot.jpg" alt="Casual"></div>
@@ -334,7 +332,6 @@
         <div class="gallery-item"><img src="images/ed_mx.jpg" alt="Commercial"></div>
         <div class="gallery-item"><img src="images/fellas_laughing.JPG" alt="Commercial"></div>
         <div class="gallery-item"><img src="images/Difw5.jpg" alt="Headshot" data-caption="London — Kodak Portra 400"></div>
-        <!-- END OF PHOTOS -->
     </main>
 
     <!-- FULLSCREEN LIGHTBOX -->
@@ -352,7 +349,6 @@
     </div>
 
     <script>
-        // 1. LIGHT / DARK CANVAS TOGGLE
         /* 1. LIGHT / DARK CANVAS TOGGLE (DARK BY DEFAULT) */
         const themeToggle = document.getElementById('themeToggle');
         const savedTheme = localStorage.getItem('siteTheme') || 'dark';
@@ -365,25 +361,89 @@
             localStorage.setItem('siteTheme', nextTheme);
         });
 
-        // 2. SCROLL-TRIGGERED FADE-IN
-        const galleryItems = document.querySelectorAll('.gallery-item');
+        /* 2. SCROLL-TRIGGERED FADE-IN (FAIL-SAFE) */
+        document.documentElement.classList.add('js-ready');
+        const allItems = Array.from(document.querySelectorAll('.gallery-item'));
+        let revealObserver = null;
+
         if ('IntersectionObserver' in window) {
-            const revealObserver = new IntersectionObserver((entries, observer) => {
-                entries.forEach(entry => {
+            revealObserver = new IntersectionObserver((entries, obs) => {
+                entries.forEach((entry) => {
                     if (entry.isIntersecting) {
                         entry.target.classList.add('is-visible');
-                        observer.unobserve(entry.target);
+                        obs.unobserve(entry.target);
                     }
                 });
-            }, { threshold: 0.05, rootMargin: '0px 0px -30px 0px' });
-
-            galleryItems.forEach(item => revealObserver.observe(item));
+            }, { threshold: 0.01 });
         } else {
-            galleryItems.forEach(item => item.classList.add('is-visible'));
+            allItems.forEach((item) => item.classList.add('is-visible'));
         }
 
-        // 3. FULLSCREEN LIGHTBOX
-        const images = Array.from(document.querySelectorAll('.gallery-item img'));
+        /* 3. BALANCED MASONRY COLUMNS */
+        const gallery = document.querySelector('.gallery-container');
+        let activeColCount = 0;
+
+        function getColumnCount() {
+            if (window.innerWidth <= 600) return 1;
+            if (window.innerWidth <= 900) return 2;
+            return 3;
+        }
+
+        function layoutMasonry(force = false) {
+            const colCount = getColumnCount();
+            if (!force && colCount === activeColCount) return;
+            activeColCount = colCount;
+
+            gallery.innerHTML = '';
+            const columns = [];
+            const heights = new Array(colCount).fill(0);
+
+            for (let i = 0; i < colCount; i++) {
+                const col = document.createElement('div');
+                col.className = 'masonry-column';
+                gallery.appendChild(col);
+                columns.push(col);
+            }
+
+            allItems.forEach((item) => {
+                const img = item.querySelector('img');
+                const ratio = (img && img.naturalWidth) ? (img.naturalHeight / img.naturalWidth) : 1;
+                let shortest = 0;
+                for (let i = 1; i < colCount; i++) {
+                    if (heights[i] < heights[shortest]) shortest = i;
+                }
+                columns[shortest].appendChild(item);
+                heights[shortest] += ratio + 0.06;
+
+                if (revealObserver && !item.classList.contains('is-visible')) {
+                    revealObserver.unobserve(item);
+                    revealObserver.observe(item);
+                }
+            });
+        }
+
+        const masonryImgs = allItems.map((item) => item.querySelector('img')).filter(Boolean);
+        let loadedCount = 0;
+        function onImgReady() {
+            loadedCount++;
+            if (loadedCount === masonryImgs.length) layoutMasonry(true);
+        }
+
+        masonryImgs.forEach((img) => {
+            if (img.complete) {
+                onImgReady();
+            } else {
+                img.addEventListener('load', onImgReady, { once: true });
+                img.addEventListener('error', onImgReady, { once: true });
+            }
+        });
+
+        layoutMasonry(true);
+        window.addEventListener('load', () => layoutMasonry(true));
+        window.addEventListener('resize', () => layoutMasonry(false));
+
+        /* 4. FULLSCREEN LIGHTBOX */
+        const images = masonryImgs;
         const lightbox = document.getElementById('lightbox');
         const lightboxStage = document.getElementById('lightboxStage');
         const lightboxImg = document.getElementById('lightboxImg');
@@ -401,6 +461,7 @@
         }
 
         function showPhoto(index) {
+            if (!images.length) return;
             currentIndex = (index + images.length) % images.length;
             const target = images[currentIndex];
             lightboxImg.classList.remove('loaded');
@@ -439,12 +500,10 @@
         prevBtn.addEventListener('click', (e) => { e.stopPropagation(); showPhoto(currentIndex - 1); });
         nextBtn.addEventListener('click', (e) => { e.stopPropagation(); showPhoto(currentIndex + 1); });
 
-        // Close when clicking empty space around the photo
         lightboxStage.addEventListener('click', (e) => {
             if (e.target === lightboxStage) closeLightbox();
         });
 
-        // Keyboard controls
         document.addEventListener('keydown', (e) => {
             if (!lightbox.classList.contains('open')) return;
             if (e.key === 'Escape') closeLightbox();
@@ -452,7 +511,6 @@
             if (e.key === 'ArrowLeft') showPhoto(currentIndex - 1);
         });
 
-        // Mobile swipe controls
         lightbox.addEventListener('touchstart', (e) => {
             touchStartX = e.changedTouches[0].screenX;
         }, { passive: true });
@@ -463,64 +521,6 @@
                 showPhoto(diff < 0 ? currentIndex + 1 : currentIndex - 1);
             }
         }, { passive: true });
-        /* 4. BALANCED MASONRY COLUMNS */
-        const gallery = document.querySelector('.gallery-container');
-        const allItems = Array.from(document.querySelectorAll('.gallery-item'));
-        let activeColCount = 0;
-
-        function getColumnCount() {
-            if (window.innerWidth <= 600) return 1;
-            if (window.innerWidth <= 900) return 2;
-            return 3;
-        }
-
-        function layoutMasonry(force = false) {
-            const colCount = getColumnCount();
-            if (!force && colCount === activeColCount) return;
-            activeColCount = colCount;
-
-            gallery.innerHTML = '';
-            const columns = [];
-            const heights = new Array(colCount).fill(0);
-
-            for (let i = 0; i < colCount; i++) {
-                const col = document.createElement('div');
-                col.className = 'masonry-column';
-                gallery.appendChild(col);
-                columns.push(col);
-            }
-
-            allItems.forEach((item) => {
-                const img = item.querySelector('img');
-                const ratio = (img && img.naturalWidth) ? (img.naturalHeight / img.naturalWidth) : 1;
-                let shortest = 0;
-                for (let i = 1; i < colCount; i++) {
-                    if (heights[i] < heights[shortest]) shortest = i;
-                }
-                columns[shortest].appendChild(item);
-                heights[shortest] += ratio + 0.06;
-                if (!item.classList.contains('is-visible')) observer.observe(item);
-            });
-        }
-
-        const masonryImgs = allItems.map(item => item.querySelector('img')).filter(Boolean);
-        let loadedCount = 0;
-        function onImgReady() {
-            loadedCount++;
-            if (loadedCount === masonryImgs.length) layoutMasonry(true);
-        }
-
-        masonryImgs.forEach((img) => {
-            if (img.complete) {
-                onImgReady();
-            } else {
-                img.addEventListener('load', onImgReady, { once: true });
-                img.addEventListener('error', onImgReady, { once: true });
-            }
-        });
-
-        layoutMasonry(true);
-        window.addEventListener('resize', () => layoutMasonry(false));
     </script>
 
 </body>
